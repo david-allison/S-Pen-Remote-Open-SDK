@@ -16,11 +16,18 @@
 
 package io.github.davidallison.android.sdk.penremote
 
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Context
 import android.content.Context.BIND_AUTO_CREATE
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.IBinder
+import android.util.Log
+import com.samsung.android.sdk.penremote.ISPenRemoteService
 import io.github.davidallison.android.sdk.penremote.SPenRemote.ConnectionResultCallback
 import io.github.davidallison.android.sdk.penremote.SPenRemote.connect
 import io.github.davidallison.android.sdk.penremote.SPenRemote.disconnect
@@ -76,134 +83,159 @@ object SPenRemote {
 
     private const val SERVICE_CLASS_NAME = "com.samsung.android.service.aircommand.remotespen.external.RemoteSpenBindingService"
 
+    private var stateChangeListener: ConnectionStateChangeListener? = null
+
     // This is initially false
     // This is true immediately after `context.bindService` is called [connect]
     // This is false immediately after `context.unbindService` is called [disconnect]
     // Probable BUG: The value of this is not affected by [ServiceConnection]
     //   onServiceDisconnected or errors in onServiceConnected will not set this to false
-    var isConnected: Boolean
-        get() = TODO()
-        private set(value) { TODO() }
+    var isConnected: Boolean = false
+        private set
 
-    /** ===============  Service connection logic ====================== **/
-    // onServiceConnected
-       // Add a log message
-       /**
-        * If the service is null, return [ConnectionResultCallback.Error.CONNECTION_FAILED] to [ConnectionResultCallback]
-        * This is NOT done asynchronously, which is unusual
-        */
+    private var iSpenRemoteService: ISPenRemoteService? = null
 
-       // If the service is not null:
-          // store a reference to the service
-          // inside SPenUnitManager:
-            // obtain a reference to the remote service
-            // remove all caches
-           /** This method also clears the cached [SPenUnit] instances whenever called */
+    private var connectionResultCallback: ConnectionResultCallback? = null
 
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
+            Log.i("Spen", "Service connected")
+            if (service == null) {
+                connectionResultCallback?.onFailure(ConnectionResultCallback.Error.CONNECTION_FAILED)
+                return
+            }
+            iSpenRemoteService = ISPenRemoteService.Stub.asInterface(service)
 
-          // set the remoteService on the singleton instance of [SpenUnitManager] to the service
-          // call [ConnectionResultCallback] with an instance of the service
-          // call [ConnectionStateChangeListener] with [State.CONNECTED]
+            SPenUnitManager.instance.remoteService = iSpenRemoteService
+            connectionResultCallback?.onSuccess(SPenUnitManager.instance)
+            stateChangeListener?.onChange(ConnectionStateChangeListener.State.CONNECTED)
+        }
 
-    //onServiceDisconnected
-       // the stored reference is set to null
-       // [SPenUnitManager] has caches and reference to the service removed
-       // Logging of the disconnection occurs
-       // [ConnectionStateChangeListener] is called with [State.DISCONNECTED_BY_UNKNOWN_REASON] (??)
+        override fun onServiceDisconnected(className: ComponentName?) {
+            Log.i("Spen", "Service disconnected")
+            iSpenRemoteService = null
+            SPenUnitManager.instance.remoteService = null
+            isConnected = false
 
+            // [ConnectionStateChangeListener] is called with [State.DISCONNECTED_BY_UNKNOWN_REASON] (??)
+            stateChangeListener?.onChange(ConnectionStateChangeListener.State.DISCONNECTED_BY_UNKNOWN_REASON)
+        }
+    }
+
+    private var semFeatureList: List<String>? = null
 
     fun isFeatureEnabled(feature: Feature): Boolean {
-        TODO("load supported features if not already loaded, and return from cache if loaded")
         // interestingly, this is ONLY user-facing, [SPenUnitManager] will allow listening to
         // a feature even if [isFeatureEnabled] returns false. It's up to the user to check
         // before listening
 
+        if (semFeatureList != null){
+            return semFeatureList!!.contains(feature.samsungFeatureName)
+        }
+
         // PROCEDURE: loading supported features - only called once
         // Note that loading the features may occur without a call to isFeatureEnabled [if inside connect()]
-        TODO("if neither of the two features below are returned, treat this as a failure and cache the fact that no features are available")
-        TODO("after a failure: connect() should not proceed, and isFeatureEnabled should always return false")
-        /** See documentation on [SemFeatures.SPEN_FEATURE_LIST] for how to obtain the list */
-        // The list is returned as a comma separated string
-        // From the above string, the two features which we care about are:
-        /** [Feature.samsungFeatureName]: "button" & "airmotion" */
-        // if the string[s] exist, the feature exists
-        // cache the values for whether each feature exists
+
+        val featureList = FloatingFeatureReflected().getString(SemFeatures.SPEN_FEATURE_LIST)
+        semFeatureList = featureList?.split(",") ?: listOf()
+        return isFeatureEnabled(feature)
     }
+
 
     /**
      * @throws java.lang.NoClassDefFoundError: Failed resolution of: Lcom/samsung/android/feature/SemFloatingFeature;
      * This is a bug: https://forum.developer.samsung.com/t/spenremotesdk-on-device-without-samsung-android-feature/7939
      */
     fun connect(activity: Activity, listener: ConnectionResultCallback) {
+
+        fun unsupported() {
+            Log.e("SPen", "Unsupported device")
+            listener.onFailure(ConnectionResultCallback.Error.UNSUPPORTED_DEVICE)
+        }
+
         // NOTE: Validation that `context` is an `Activity` has been removed, in favour of accepting a non-null Context
 
         // NOTE: this routine seems buggy:
-          // * if a failure was obtained, the method continued executing
-          // * [listener] may not be invoked on failure, even though it is intended to be
+        // * if a failure was obtained, the method continued executing
+        // * [listener] may not be invoked on failure, even though it is intended to be
         // I strongly recommend fixing the above bugs in the reimplementation
         // and have therefore modified the below definitions to specify the behaviour which I would
         // prefer
 
-        TODO("Log the version number")
+        Log.i("Spen", VERSION_NAME)
 
-        TODO("Validate that the user is using a Samsung device")
-        TODO("A samsung device is a device where both Build.BRAND and Build.MANUFACTURER are defined")
-        TODO("the two above values should be 'Samsung' (ignoring case, locale insensitive)")
-            TODO("if the device is non-Samsung, log and send the error: UNSUPPORTED_DEVICE and return")
 
-        TODO("Validate that air commands + S Pen Framework exist as a package")
+        if (!(Build.BRAND.equals("Samsung", true) &&
+                    Build.MANUFACTURER.equals("Samsung", true))
+        ) {
+            unsupported()
+            return
+        }
+
+//        TODO("Validate that air commands + S Pen Framework exist as a package")
         // use INTENT_PACKAGE_NAME and FLAG_GRANT_PREFIX_URI_PERMISSION
         // If an exception is not returned, the check succeeded
         // If a NameNotFoundException is obtained, log, send UNSUPPORTED_DEVICE and return
 
-        TODO("Validate that Bluetooth Low Energy is supported [SemFeatures.HAS_BLUETOOTH_LOW_ENERGY]")
-        // If not, log, send UNSUPPORTED_DEVICE and return
+        try {
+            activity.packageManager.getApplicationInfo(
+                Constants.INTENT_PACKAGE_NAME,
+                PackageManager.GET_META_DATA
+            )
+        } catch (e: PackageManager.NameNotFoundException) {
+            unsupported()
+            return
+        }
 
 
-        TODO("Verify supported features; See: isFeatureEnabled")
-        // load supported features and ensure the call works
-        // If not, log, send UNSUPPORTED_DEVICE and return
+        if (!FloatingFeatureReflected().getBoolean(SemFeatures.HAS_BLUETOOTH_LOW_ENERGY)) {
+            unsupported()
+            return
+        }
 
-        TODO("We can start binding")
+        if (!isFeatureEnabled(Feature.FEATURE_TYPE_BUTTON)) {
+            unsupported()
+            return
+        }
 
-        TODO("The provided [listener] should be usable inside [ServiceConnection]")
-        TODO("Log that we're binding")
+        connectionResultCallback = listener
 
+        @SuppressLint("WrongConstant")
+        val intent = Intent()
+            .addFlags(Constants.INTENT_FLAGS)
+            .setClassName(Constants.INTENT_PACKAGE_NAME, Constants.INTENT_CLASS_NAME)
+            .putExtra(Constants.INTENT_EXTRA_BINDER_TYPE, Constants.INTENT_EXTRA_BINDER_TYPE_VALUE)
+            .putExtra(Constants.INTENT_EXTRA_CLIENT_VERSION, Constants.INTENT_EXTRA_CLIENT_VERSION_VALUE)
+            .putExtra(Constants.INTENT_EXTRA_CLIENT_PACKAGE_NAME, activity.packageName)
 
-        TODO("An intent is produced, for a call to bindService")
-        // className: INTENT_PACKAGE_NAME, INTENT_CLASS_NAME
-        // extras:
-          // INTENT_EXTRA_BINDER_TYPE           // constant value
-          // INTENT_EXTRA_CLIENT_VERSION        // constant value
-          // INTENT_EXTRA_CLIENT_PACKAGE_NAME   // dynamic value obtained from the provided context
-
-        TODO("bindService is called, using the above intent and flag: BIND_AUTO_CREATE")
-        // If a SecurityException is caught from the `bindService` call
-        //    Log an error stating that the following permission is required: "com.samsung.android.sdk.penremote.BIND_SPEN_REMOTE"
-        //    BUG: if this error occurs neither ConnectionResultCallback nor
-        //    ConnectionStateChangeListener are called
-
-        // if the call succeeds, [isConnected] should return true
-
-        // execution continues asynchronously inside the [ServiceConnection] instance which is
-        // managed by the class and passed to `bindService`
+        try {
+            activity.bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+            isConnected = true
+        } catch (e: SecurityException) {
+            Log.e(
+                "Spen",
+                "Permission com.samsung.android.sdk.penremote.BIND_SPEN_REMOTE is required"
+            )
+            //    BUG: if this error occurs neither ConnectionResultCallback nor
+            //    ConnectionStateChangeListener are called
+        }
     }
 
     /** @see ConnectionStateChangeListener */
     // unusually: visible setter and non-visible getter
     fun setConnectionStateChangeListener(listener: ConnectionStateChangeListener) {
-        TODO()
+        this.stateChangeListener = listener
     }
 
     fun disconnect(context: Context) {
-        // if the service is not connected, do nothing
+        if (!isConnected) return
 
-        // otherwise:
-        TODO("Log that the service is disconnecting")
-        TODO("The Unit Manager should have ALL event listeners unbound, but cached entries are NOT yet removed")
-        TODO("The service should be unbound using context.unbindService")
+        Log.i("Spen", "Service is disconnecting")
+        // The Unit Manager should have ALL event listeners unbound, but cached entries are NOT yet removed
+        SPenUnitManager.instance.clearListeners()
+        context.unbindService(serviceConnection)
         // inside the onServiceDisconnected call, the Unit Manager should have its caches removed, and should no longer reference the service
-        TODO("A connection state DISCONNECTED message should be sent")
+        stateChangeListener?.onChange(ConnectionStateChangeListener.State.DISCONNECTED)
 
         // at this point, the service should be disconnected and the class state should be updated
     }
@@ -332,5 +364,31 @@ object SPenRemote {
 
         /** Used when checking whether [SERVICE_CLASS_NAME] exists */
         private const val FLAG_GRANT_PREFIX_URI_PERMISSION = Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+    }
+
+    private class FloatingFeatureReflected {
+        val className = "com.samsung.android.feature.SemFloatingFeature"
+
+        var clazz: Class<*>?
+        var instance: Any?
+
+        init {
+            val classLoader = ClassLoader.getSystemClassLoader()
+            clazz = classLoader.loadClass(className)
+            instance = clazz?.getDeclaredMethod("getInstance")?.invoke(null, *arrayOf())
+        }
+
+        fun getString(feature: SemFeatures): String? {
+            return clazz?.getDeclaredMethod("getString", java.lang.String::class.java)
+                ?.invoke(instance, feature.feature) as String?
+        }
+
+        fun getBoolean(feature: SemFeatures): Boolean {
+            return clazz?.getDeclaredMethod(
+                "getBoolean",
+                java.lang.String::class.java,
+                Boolean::class.javaPrimitiveType
+            )?.invoke(instance, feature.feature, false) as Boolean? ?: false
+        }
     }
 }

@@ -16,6 +16,16 @@
 
 package io.github.davidallison.android.sdk.penremote
 
+import android.os.IBinder
+import android.os.IInterface
+import android.os.Parcel
+import android.sax.EndElementListener
+import android.util.Log
+import com.samsung.android.sdk.penremote.ISpenEventListener
+import com.samsung.android.sdk.penremote.ISPenRemoteService
+import java.io.FileDescriptor
+import com.samsung.android.sdk.penremote.SpenEvent as SamSpenEvent
+
 /*
  * This class manages instances of specific S Pen embedded unit.
  *
@@ -44,4 +54,25 @@ package io.github.davidallison.android.sdk.penremote
 /**
  * https://developer.samsung.com/galaxy-spen-remote/api-reference/com/samsung/android/sdk/penremote/SpenUnit.html
  */
-class SPenUnit internal constructor()
+class SPenUnit internal constructor(
+    val type: SPenUnitType,
+    val remoteService: ISPenRemoteService
+): ISpenEventListener.Stub() {
+
+    private var sPenEventListener: SPenEventListener? = null
+
+    fun registerSpenEventListener(listener: SPenEventListener) {
+        sPenEventListener = listener;
+        remoteService.registerSpenEventListener(type.code, this);
+    }
+
+    fun unregisterSpenEventListener(){
+        sPenEventListener?.let {
+            remoteService.unregisterSpenEventListener(type.code, this)
+        }
+    }
+
+    override fun onEvent(event: SamSpenEvent?) {
+        event?.let { sPenEventListener?.onEvent(SPenEvent(it)) }
+    }
+}

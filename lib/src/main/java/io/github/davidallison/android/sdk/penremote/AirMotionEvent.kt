@@ -37,10 +37,13 @@ package io.github.davidallison.android.sdk.penremote
  * https://developer.samsung.com/galaxy-spen-remote/api-reference/com/samsung/android/sdk/penremote/AirMotionEvent.html
  */
 class AirMotionEvent(event: SPenEvent) {
-    init {
-        TODO("set variables using the SpenEvent")
-    }
-    val deltaX: Float // index 0 in the provided SPenEvent
-    val deltaY: Float // index 1 in the provided SPenEvent
+    val deltaX: Float
+    val deltaY: Float
     val timeStamp: Long
+
+    init {
+        timeStamp = event.timeStamp
+        deltaX = event.values[1]
+        deltaY = event.values[2]
+    }
 }
