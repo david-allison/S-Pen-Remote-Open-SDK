@@ -16,6 +16,11 @@
 
 package io.github.davidallison.android.sdk.penremote
 
+import android.os.RemoteException
+import android.util.Log
+import com.samsung.android.sdk.penremote.ISPenRemoteService
+import java.util.EnumMap
+
 /**
  * Allows a user to set [event listeners][SPenEventListener] for specific [events][SPenUnitType]
  * sent by the S Pen:
@@ -41,11 +46,19 @@ package io.github.davidallison.android.sdk.penremote
 // The constructor has no functionality
 class SPenUnitManager private constructor() {
 
+    internal var remoteService: ISPenRemoteService? = null
+        set(value) {
+            field = value
+            unitCache.clear()
+        }
+
+    private var unitCache: MutableMap<SPenUnitType, SPenUnit> = EnumMap(SPenUnitType::class.java)
 
     /**
      * Obtains a [SPenUnit] of the provided [unitType]
      */
     fun getUnit(unitType: SPenUnitType): SPenUnit {
+        if (remoteService == null) throw RemoteException("Service not connected")
         // NOTE: The original code accepted an int and had the possibility of returning null
         // The new code accepts an enum, and each value should be handled
 
@@ -56,7 +69,9 @@ class SPenUnitManager private constructor() {
         // The SPenUnit should have knowledge of its type, and maintain its own reference to the
         // [ISpenRemoteService]
 
-        TODO()
+        return unitCache[unitType] ?: SPenUnit(unitType, remoteService!!).also {
+            unitCache[unitType] = it
+        }
     }
 
     /**
@@ -105,6 +120,12 @@ class SPenUnitManager private constructor() {
         // NOTE: in the original implementation, the Stub forwarded the same event to SPenEventListener
         // in this implementation, we should convert from [com.samsung.android.sdk.penremote.SpenEvent]
         // to [io.github.davidallison.penremote.SPenEvent]
+        if (remoteService == null) throw RemoteException("Service not connected")
+        try {
+            unit.registerSpenEventListener(listener)
+        } catch (e: RemoteException) {
+            Log.e("Spen", "Error when registering listener", e)
+        }
     }
 
     /**
@@ -113,5 +134,14 @@ class SPenUnitManager private constructor() {
     fun unregisterSpenEventListener(unit: SPenUnit) {
         // remove the listener added to the unit in [registerSPenEventListener]
         // interface with the [remoteService] associated with the unit and remove the listener
+        unit.unregisterSpenEventListener()
+    }
+
+    internal fun clearListeners() {
+        unitCache.values.forEach { unregisterSpenEventListener(it) }
+    }
+
+    companion object {
+        internal val instance = SPenUnitManager()
     }
 }

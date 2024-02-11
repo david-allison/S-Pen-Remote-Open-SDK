@@ -31,5 +31,5 @@ parcelable SpenEvent;
  * The type of event is specified in the call to ISpenRemoteService
  */
 interface ISpenEventListener {
-    void onEvent(out SpenEvent event);
+    void onEvent(in SpenEvent event);
 }

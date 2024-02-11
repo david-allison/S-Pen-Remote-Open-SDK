@@ -17,8 +17,8 @@
 // this class is inside com.samsung so it can be used by the AIDL
 package com.samsung.android.sdk.penremote
 
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 
 /*
  * A [parcel][Parcelable] used to efficiently receive S Pen events from [ISpenEventListener]
@@ -47,9 +47,28 @@ import kotlinx.parcelize.Parcelize
  *
  * @hide
  */
-@Parcelize
 data class SpenEvent(val timeStamp: Long, val values: Array<Float>) : Parcelable {
-    init {
-        TODO("Stop using Parcelize and implement Parcelable manually; remove the library reference to kotlin-parcelize")
+    constructor(parcel: Parcel) : this(
+        parcel.readLong(),
+        // TODO: Might not be correct, but works for now
+        Array(parcel.readInt() + 1) { parcel.readFloat() }
+    )
+    override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeLong(timeStamp)
+        parcel.writeFloatArray(values.toFloatArray())
+    }
+
+    override fun describeContents(): Int {
+        return 0
+    }
+
+    companion object CREATOR : Parcelable.Creator<SpenEvent> {
+        override fun createFromParcel(parcel: Parcel): SpenEvent {
+            return SpenEvent(parcel)
+        }
+
+        override fun newArray(size: Int): Array<SpenEvent?> {
+            return arrayOfNulls(size)
+        }
     }
 }

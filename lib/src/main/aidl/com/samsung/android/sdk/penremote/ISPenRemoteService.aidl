@@ -23,7 +23,7 @@ import com.samsung.android.sdk.penremote.ISpenEventListener;
  *
  * @see SPenUnitType
  */
-interface ISpenRemoteService {
+interface ISPenRemoteService {
    /**
     * Registers a listener for events of the provided type
     *

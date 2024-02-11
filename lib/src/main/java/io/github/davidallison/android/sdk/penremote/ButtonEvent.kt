@@ -33,14 +33,11 @@ package io.github.davidallison.android.sdk.penremote
  * https://developer.samsung.com/galaxy-spen-remote/api-reference/com/samsung/android/sdk/penremote/ButtonEvent.html
  */
 class ButtonEvent(event: SPenEvent) {
-    init {
-        TODO("set variables from constructor")
-    }
-    val action: ButtonAction // index 0 in the provided SPenEvent, cast to an int, then to ButtonAction
-    val timestamp: Long
+    val timeStamp: Long = event.timeStamp
+    val action: ButtonAction =
+        if (event.values[1].toInt() == 0) ButtonAction.ACTION_DOWN else ButtonAction.ACTION_UP
 
     enum class ButtonAction(val code: Int) {
-        ACTION_DOWN(0),
-        ACTION_UP(1),
+        ACTION_DOWN(0), ACTION_UP(1),
     }
 }
