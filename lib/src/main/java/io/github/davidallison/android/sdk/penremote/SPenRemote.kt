@@ -78,10 +78,13 @@ import io.github.davidallison.android.sdk.penremote.SPenRemote.isFeatureEnabled
 //      Knowing whether the connection is active, and returning the value via [isConnected]
 object SPenRemote {
     const val VERSION_CODE = 16777217
+
     /** MAJOR.MINOR.REVISION */
     const val VERSION_NAME = "1.0.1"
 
-    private const val SERVICE_CLASS_NAME = "com.samsung.android.service.aircommand.remotespen.external.RemoteSpenBindingService"
+    private const val SERVICE_CLASS_NAME =
+        "com.samsung.android.service.aircommand.remotespen.external.RemoteSpenBindingService"
+    private const val AIR_COMMAND_PACKAGE_NAME = "com.samsung.android.service.aircommand"
 
     private var stateChangeListener: ConnectionStateChangeListener? = null
 
@@ -129,7 +132,7 @@ object SPenRemote {
         // a feature even if [isFeatureEnabled] returns false. It's up to the user to check
         // before listening
 
-        if (semFeatureList != null){
+        if (semFeatureList != null) {
             return semFeatureList!!.contains(feature.samsungFeatureName)
         }
 
@@ -173,13 +176,13 @@ object SPenRemote {
         }
 
 //        TODO("Validate that air commands + S Pen Framework exist as a package")
-        // use INTENT_PACKAGE_NAME and FLAG_GRANT_PREFIX_URI_PERMISSION
+        // use INTENT_PACKAGE_NAME and Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
         // If an exception is not returned, the check succeeded
         // If a NameNotFoundException is obtained, log, send UNSUPPORTED_DEVICE and return
 
         try {
             activity.packageManager.getApplicationInfo(
-                Constants.INTENT_PACKAGE_NAME,
+                AIR_COMMAND_PACKAGE_NAME,
                 PackageManager.GET_META_DATA
             )
         } catch (e: PackageManager.NameNotFoundException) {
@@ -201,12 +204,13 @@ object SPenRemote {
         connectionResultCallback = listener
 
         @SuppressLint("WrongConstant")
-        val intent = Intent()
-            .addFlags(Constants.INTENT_FLAGS)
-            .setClassName(Constants.INTENT_PACKAGE_NAME, Constants.INTENT_CLASS_NAME)
-            .putExtra(Constants.INTENT_EXTRA_BINDER_TYPE, Constants.INTENT_EXTRA_BINDER_TYPE_VALUE)
-            .putExtra(Constants.INTENT_EXTRA_CLIENT_VERSION, Constants.INTENT_EXTRA_CLIENT_VERSION_VALUE)
-            .putExtra(Constants.INTENT_EXTRA_CLIENT_PACKAGE_NAME, activity.packageName)
+        val intent = Intent().apply {
+            flags = BIND_AUTO_CREATE
+            setClassName(AIR_COMMAND_PACKAGE_NAME, SERVICE_CLASS_NAME)
+            putExtra("binderType", 2)
+            putExtra("clientVersion", VERSION_CODE)
+            putExtra("clientPackageName", activity.packageName)
+        }
 
         try {
             activity.bindService(intent, serviceConnection, BIND_AUTO_CREATE)
@@ -265,6 +269,7 @@ object SPenRemote {
          */
         // string
         SPEN_FEATURE_LIST("SEC_FLOATING_FEATURE_COMMON_CONFIG_BLE_SPEN_SPEC"),
+
         // boolean
         HAS_BLUETOOTH_LOW_ENERGY("SEC_FLOATING_FEATURE_COMMON_SUPPORT_BLE_SPEN"),
     }
@@ -297,8 +302,10 @@ object SPenRemote {
              */
             // This is called AFTER ConnectionResultCallback.onSuccess
             CONNECTED(0),
+
             /** When [SPenRemote.disconnect] is called */
             DISCONNECTED(-1),
+
             /**
              * If the service is disconnected unexpectedly by [ServiceConnection.onServiceDisconnected]
              *
@@ -324,6 +331,7 @@ object SPenRemote {
     interface ConnectionResultCallback {
         /** A [SPenUnitManager] can be used */
         fun onSuccess(unitManager: SPenUnitManager)
+
         /**
          * A failure occurred when connecting to the service
          *
@@ -344,28 +352,20 @@ object SPenRemote {
              * * The device does not list any S Pen Remote features
              */
             UNSUPPORTED_DEVICE(-1),
+
             /** The second parameter to [ServiceConnection.onServiceConnected] was null */
             CONNECTION_FAILED(-2),
+
             /** Unused */
             UNKNOWN(-100),
         }
     }
 
-    private object Constants {
-        /** Data for the call to [Context.bindService] */
-        const val INTENT_PACKAGE_NAME = "com.samsung.android.service.aircommand"
-        const val INTENT_CLASS_NAME = SERVICE_CLASS_NAME
-        const val INTENT_EXTRA_BINDER_TYPE = "binderType"
-        const val INTENT_EXTRA_BINDER_TYPE_VALUE = 2
-        const val INTENT_EXTRA_CLIENT_VERSION = "clientVersion"
-        const val INTENT_EXTRA_CLIENT_VERSION_VALUE = VERSION_CODE
-        const val INTENT_EXTRA_CLIENT_PACKAGE_NAME = "clientPackageName"
-        const val INTENT_FLAGS = BIND_AUTO_CREATE
-
-        /** Used when checking whether [SERVICE_CLASS_NAME] exists */
-        private const val FLAG_GRANT_PREFIX_URI_PERMISSION = Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
-    }
-
+    /**
+     * Manages a reflected instance of com.samsung.android.feature.SemFloatingFeature
+     *
+     * @throws ClassNotFoundException
+     */
     private class FloatingFeatureReflected {
         val className = "com.samsung.android.feature.SemFloatingFeature"
 

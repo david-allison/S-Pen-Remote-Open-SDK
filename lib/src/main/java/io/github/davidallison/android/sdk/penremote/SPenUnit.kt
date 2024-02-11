@@ -20,7 +20,6 @@ import android.os.IBinder
 import android.os.IInterface
 import android.os.Parcel
 import android.sax.EndElementListener
-import android.util.Log
 import com.samsung.android.sdk.penremote.ISpenEventListener
 import com.samsung.android.sdk.penremote.ISPenRemoteService
 import java.io.FileDescriptor
@@ -61,9 +60,9 @@ class SPenUnit internal constructor(
 
     private var sPenEventListener: SPenEventListener? = null
 
-    fun registerSpenEventListener(listener: SPenEventListener) {
-        sPenEventListener = listener;
-        remoteService.registerSpenEventListener(type.code, this);
+    internal fun registerSpenEventListener(listener: SPenEventListener) {
+        sPenEventListener = listener
+        remoteService.registerSpenEventListener(type.code, this)
     }
 
     fun unregisterSpenEventListener(){

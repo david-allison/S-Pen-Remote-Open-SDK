@@ -123,7 +123,7 @@ class SPenUnitManager private constructor() {
         if (remoteService == null) throw RemoteException("Service not connected")
         try {
             unit.registerSpenEventListener(listener)
-        } catch (e: RemoteException){
+        } catch (e: RemoteException) {
             Log.e("Spen", "Error when registering listener", e)
         }
     }
@@ -137,9 +137,8 @@ class SPenUnitManager private constructor() {
         unit.unregisterSpenEventListener()
     }
 
-    internal fun clearListeners(){
-        unregisterSpenEventListener(getUnit(SPenUnitType.TYPE_BUTTON))
-        unregisterSpenEventListener(getUnit(SPenUnitType.TYPE_AIR_MOTION))
+    internal fun clearListeners() {
+        unitCache.values.forEach { unregisterSpenEventListener(it) }
     }
 
     companion object {
