@@ -19,8 +19,7 @@ Samsung's Galaxy S Pen Remote SDK
 The Galaxy S Pen Remote SDK was non-free and Samsung had [not replied to requests](https://forum.developer.samsung.com/t/disabling-spen-air-command-for-the-app/18585/2) 
 relating to it.
 
-The first commit contained a specification has been written via 
-inspection of the functionality.
+The first commit defined a specification of the library, written via inspection of the functionality.
 
 The specification contained the [public API](https://developer.samsung.com/galaxy-spen-remote/api-reference/com/samsung/android/sdk/penremote/package-summary.html) 
 of the library in Java, converted to Kotlin and improved via the use of `enum class`
