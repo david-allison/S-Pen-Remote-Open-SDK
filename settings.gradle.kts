@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "S Pen Remote Open SDK"
 include(":lib")
- 
+include(":app")
